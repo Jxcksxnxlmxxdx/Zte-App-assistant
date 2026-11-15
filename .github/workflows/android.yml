@@ -2,25 +2,54 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: set up JDK 11
-      uses: actions/setup-java@v4
-      with:
-        java-version: '11'
-        distribution: 'temurin'
-        cache: gradle
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    - name: Build with Gradle
-      run: ./gradlew build
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK 35 packages
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Extract Android source archive
+        run: |
+          unzip -q "$GITHUB_WORKSPACE/ZTE_Config_Assistant_Source.zip" -d "$RUNNER_TEMP/zte-source"
+          test -f "$RUNNER_TEMP/zte-source/ZTE_Config_Assistant/settings.gradle.kts"
+          test -f "$RUNNER_TEMP/zte-source/ZTE_Config_Assistant/app/build.gradle.kts"
+
+      - name: Build debug APK
+        run: gradle --no-daemon -p "$RUNNER_TEMP/zte-source/ZTE_Config_Assistant" :app:assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZTEConfigAssistant-debug-apk
+          path: ${{ runner.temp }}/zte-source/ZTE_Config_Assistant/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
